@@ -243,12 +243,13 @@ Request.prototype.init = function (options) {
 
   // DEPRECATED: Warning for users of the old Unix Sockets URL Scheme
   if (self.uri.protocol === 'unix:') {
-    return self.emit('error', new Error('`unix://` URL scheme is no longer supported. Please use the format `http://unix:SOCKET:PATH`'))
+    return self.emit('error', new Error('`unix://` URL scheme is no longer supported. Please use the format `http://unix:0/SOCKET://PATH`'))
   }
 
   // Support Unix Sockets
-  if (self.uri.host === 'unix') {
-    self.enableUnixSocket()
+  if (self.uri.hostname === 'unix') {
+    var error = self.enableUnixSocket()
+    if (error != null) return self.emit('error', error)
   }
 
   if (self.strictSSL === false) {
@@ -1230,8 +1231,9 @@ Request.prototype.qs = function (q, clobber) {
   self.url = self.uri
   self.path = self.uri.path
 
-  if (self.uri.host === 'unix') {
-    self.enableUnixSocket()
+  if (self.uri.hostname === 'unix') {
+    var error = self.enableUnixSocket()
+    if (error != null) return self.emit('error', error)
   }
 
   return self
@@ -1322,17 +1324,40 @@ Request.prototype.getHeader = function (name, headers) {
   return result
 }
 Request.prototype.enableUnixSocket = function () {
-  // Get the socket & request paths from the URL
-  var unixParts = this.uri.path.split(':')
-  var host = unixParts[0]
-  var path = unixParts[1]
-  // Apply unix properties to request
-  this.socketPath = host
-  this.uri.pathname = path
-  this.uri.path = path
-  this.uri.host = host
-  this.uri.hostname = host
-  this.uri.isUnix = true
+  if (this.uri.port === '0') {
+    var part = this.uri.path
+
+    // sometimes % can get into this place
+    if (part.charAt(0) !== '/') return new Error('socketPath part must start with "/".')
+
+    var i = part.indexOf('://')
+    if (i === -1) return new Error('socketPath part must end with "://".')
+
+    this.socketPath = part.substring(1, i)
+    // keep it as-is in host so that URL resolution in server could return correct results.
+    this.uri.host = 'unix:0' + part.substring(0, i + 2)
+    this.uri.hostname = 'unix'
+    this.uri.port = null
+
+    part = part.substring(i + 2)
+    this.uri.pathname = part
+    this.uri.path = part
+
+    this.uri.isUnix = true
+  } else if (!this.uri.port) {
+    console.warn("URL format '<protocol>://unix:/SOCKET:/PATH' is deprecated, use '<protocol>://unix:0//SOCKET://PATH' instead (unix:0/./SOCKET for relative filename).")
+    // Get the socket & request paths from the URL
+    var unixParts = this.uri.path.split(':')
+    var host = unixParts[0]
+    var path = unixParts[1]
+    // Apply unix properties to request
+    this.socketPath = host
+    this.uri.pathname = path
+    this.uri.path = path
+    this.uri.host = host
+    this.uri.hostname = host
+    this.uri.isUnix = true
+  }
 }
 
 Request.prototype.auth = function (user, pass, sendImmediately, bearer) {

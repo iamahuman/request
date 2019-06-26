@@ -43,7 +43,7 @@ tape('setup', function (t) {
 })
 
 tape('unix socket connection', function (t) {
-  request('http://unix:' + socket + ':' + rawPath, function (err, res, body) {
+  request('http://unix:0/' + socket + ':/' + rawPath, function (err, res, body) {
     t.equal(err, null, 'no error in connection')
     t.equal(res.statusCode, statusCode, 'got HTTP 200 OK response')
     t.equal(body, expectedBody, 'expected response body is received')
@@ -53,7 +53,7 @@ tape('unix socket connection', function (t) {
 
 tape('unix socket connection with qs', function (t) {
   request({
-    uri: 'http://unix:' + socket + ':' + queryPath,
+    uri: 'http://unix:0/' + socket + ':/' + queryPath,
     qs: {
       foo: 'bar'
     }
